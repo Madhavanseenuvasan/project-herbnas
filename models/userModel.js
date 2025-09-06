@@ -2,26 +2,47 @@ const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 
+const counterSchema = new mongoose.Schema({
+  id: { type: String, required: true, unique: true }, // e.g. "employeeId"
+  seq: { type: Number, default: 1000 } // start from emp1001
+});
+
+const Counter = mongoose.model('Counter', counterSchema);
+
+
 const userSchema = new mongoose.Schema({
   name: { type: String, required: true },
   email: { type: String, required: true, unique: true },
-  password: { type: String, required: true, minlength: 6, select: false },
+  password: { type: String, required: true, select: false },
+  mobileNo: { type: String, required: true },
+  gender: { type: String, enum: ['Male', 'Female', 'Other'], required: true },
+  employeeId: { type: String, unique: true },
   role: {
     type: String,
-    enum: [
-      "super_admin",
-      "supervisor",
-      "junior_supervisor",
-      "admin",
-      "sales_staff"
-    ],
-    default: "sales_staff"
+    enum: ['admin', 'super_admin', 'supervisor', 'junior_supervisor', 'staff'],
+    default: 'staff',
+    required: true
   },
   branch: { type: String },
-  isActive: { type: Boolean, default: true },
+  webAccess: { type: Boolean, default: true },
+  credentialStatus: { type: String, enum: ['Active', 'Inactive'], default: 'Active' },
+  employeeStatus: { type: String, enum: ['Permanent', 'Contract'], required: true },
   resetPasswordToken: String,
   resetPasswordExpire: Date
 }, { timestamps: true });
+
+userSchema.pre('save', async function (next) {
+  if (!this.employeeId) {
+    const counter = await Counter.findOneAndUpdate(
+      { id: 'employeeId' },
+      { $inc: { seq: 1 } }, // atomically increment
+      { new: true, upsert: true } // create if doesn't exist
+    );
+
+    this.employeeId = `emp${counter.seq}`;
+  }
+  next();
+});
 
 
 userSchema.pre('save', async function (next) {
@@ -42,3 +63,6 @@ userSchema.methods.generateResetToken = function () {
 };
 
 module.exports = mongoose.model('User', userSchema);
+
+
+
